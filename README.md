@@ -82,6 +82,12 @@ bundle install
 
 # Build Docker image
 docker build -t cats-app:1.0.0 .
+docker tag dockerhubuser/cats-app:1.0.0
+docker push dockerhubuser/cats-app:1.0.0
+
+docker build -t cats-app:2.0.2 .
+docker tag dockerhubuser/cats-app:2.0.2
+docker push dockerhubuser/cats-app:2.0.2
 ```
 
 ---
@@ -121,23 +127,47 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 ### **Deployment Configuration**  
 ```yaml
 # k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cats-app
 spec:
   replicas: 3
   strategy:
+    type: RollingUpdate
     rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 0%
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: cats
   template:
+    metadata:
+      labels:
+        app: cats
     spec:
       containers:
-      - livenessProbe:
-          httpGet:
-            path: /health/live
-            port: 8000
+      - name: cats
+        image: bigstan00/cats-app:2.0.1
+        ports:
+        - containerPort: 8000
+        env:
+        - name: APP_VERSION
+          value: "1.0.0"
         readinessProbe:
           httpGet:
-            path: /health/ready
+            path: /health
             port: 8000
+          initialDelaySeconds: 15  # Account for random startup
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10 
+
+
 ```
 
 ---
