@@ -27,7 +27,6 @@ jobs:
         mkdir -p ~/.kube
         echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
         chmod 600 ~/.kube/config
-        kubectl config use-context "${{ secrets.KUBE_CONTEXT || 'default' }}"
         kubectl cluster-info
         kubectl get nodes
 
