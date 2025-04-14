@@ -21,7 +21,7 @@ jobs:
     - name: Set up Minikube
       run: |
         # Start Minikube
-        minikube start --driver=virtualbox  # Adjust this if you're using a different driver
+        minikube start --driver=docker # Adjust this if you're using a different driver
 
     - name: Set up kubectl
       run: |
