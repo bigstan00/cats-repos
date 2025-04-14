@@ -1,0 +1,33 @@
+# k8s/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: cats-service
+spec:
+  selector:
+    app: cats
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: LoadBalancer
+---
+# k8s/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cats-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: 192.168.49.2
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cats-service
+            port:
+              number: 80
