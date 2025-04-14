@@ -34,13 +34,14 @@ jobs:
     # Step 3: Build Docker image (optional, if you want to build it within the pipeline)
     - name: Build Docker image
       run: |
-        docker build -t streetbees/cats:${{ github.sha }} .
-        docker push streetbees/cats:${{ github.sha }}  # Push to your Docker registry
+        cd cats
+        docker build -t bigsta00/cats:${{ github.sha }} .
+        docker push bigstan00/cats:${{ github.sha }}  # Push to your Docker registry
 
     # Step 4: Deploy to Minikube
     - name: Deploy to Minikube
       run: |
-        kubectl set image deployment/cats-app cats=streetbees/cats:${{ github.sha }} --record
+        kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }} --record
         kubectl rollout status deployment/cats-app
 
     # Step 5: Expose the service (optional, if you don't have it already)
