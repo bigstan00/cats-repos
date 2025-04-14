@@ -1,0 +1,16 @@
+
+
+| Tool               | Pros                                      | Cons                                      |
+|--------------------|-------------------------------------------|-------------------------------------------|
+| **Minikube**       | Free, fast local testing, mimics Kubernetes | Not production-ready, limited resources   |
+| **Kubernetes**     | Built-in rolling updates, self-healing    | Complex YAML, steep learning curve       |
+| **GitHub Actions** | Easy CI/CD, integrates with Git           | Limited free minutes, YAML complexity    |
+| **Prometheus**     | Powerful monitoring, alerting             | Requires setup, resource-heavy           |
+| **kubectl**        | Direct cluster control, widely supported  | Command-heavy, needs cluster access      |
+
+### Key Takeaways:
+- **For Local Testing**: Minikube is perfect but limited.  
+- **For Production**: Use real Kubernetes clusters (EKS/GKE).  
+- **Automation**: GitHub Actions is simple but has limits.  
+- **Monitoring**: Essential but requires setup effort.  
+
