@@ -34,7 +34,7 @@ jobs:
     # Step 3: Build Docker image (optional, if you want to build it within the pipeline)
     - name: Build Docker image
       run: |
-        cd cats
+        cd /home/user/cats
         docker build -t bigsta00/cats:${{ github.sha }} .
         docker push bigstan00/cats:${{ github.sha }}  # Push to your Docker registry
 
