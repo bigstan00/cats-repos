@@ -1,3 +1,68 @@
+# name: Deploy Cats App to Minikube
+
+# on:
+#   push:
+#     branches:
+#       - master
+#     tags:
+#       - 'v*'  # Automatically deploy on new tags, e.g., v2.0.1
+#   workflow_dispatch:  # Manual trigger of the workflow
+
+# jobs:
+#   deploy:
+#     runs-on: self-hosted  # Run on your self-hosted runner
+
+#     steps:
+#     # Step 1: Checkout the code
+#     - name: Checkout repository
+#       uses: actions/checkout@v2
+
+#     # Step 2: Set up Minikube and kubectl
+#     - name: Set up Minikube
+#       run: |
+#         # Start Minikube
+#         minikube start --driver=docker # Adjust this if you're using a different driver
+
+#     - name: Set up kubectl
+#       run: |
+#         export KUBEVERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+#         curl -LO "https://dl.k8s.io/release/${KUBEVERSION}/bin/linux/amd64/kubectl"
+#         sudo install kubectl /usr/local/bin/kubectl
+#         kubectl config use-context minikube
+#         kubectl cluster-info  # Verify the Minikube cluster is running
+
+#     # Step 3: Build Docker image (optional, if you want to build it within the pipeline)
+#     - name: Build Docker image
+#       run: |
+#         cd /home/user/cats
+#         docker build -t bigstan00/cats:${{ github.sha }} .
+#         docker push bigstan00/cats:${{ github.sha }}  # Push to your Docker registry
+
+#     # Step 4: Deploy to Minikube
+#     - name: Deploy to Minikube
+#       run: |
+#         kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }} --record
+#         kubectl rollout status deployment/cats-app
+
+#     # Step 5: Expose the service (optional, if you don't have it already)
+#     - name: Expose service via Minikube tunnel
+#       run: |
+#         minikube tunnel &  # This is important for exposing the service to your local machine
+#         kubectl expose deployment cats-app --port=80 --target-port=8000 --type=NodePort
+
+#     # Step 6: Verify the deployment
+#     - name: Verify Deployment
+#       run: |
+#         kubectl get pods  # Get pods and ensure they are running
+#         kubectl get svc  # Get services and verify your service is up
+
+#     # Step 7: Clean up (optional)
+#     - name: Clean up Minikube
+#       run: |
+#         minikube stop  # Stop Minikube after the job completes
+#         minikube delete  # Optionally delete Minikube to save resources
+
+
 name: Deploy Cats App to Minikube
 
 on:
@@ -5,59 +70,42 @@ on:
     branches:
       - master
     tags:
-      - 'v*'  # Automatically deploy on new tags, e.g., v2.0.1
-  workflow_dispatch:  # Manual trigger of the workflow
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   deploy:
-    runs-on: self-hosted  # Run on your self-hosted runner
+    runs-on: self-hosted
 
     steps:
-    # Step 1: Checkout the code
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    # Step 2: Set up Minikube and kubectl
-    - name: Set up Minikube
-      run: |
-        # Start Minikube
-        minikube start --driver=docker # Adjust this if you're using a different driver
-
     - name: Set up kubectl
       run: |
-        export KUBEVERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-        curl -LO "https://dl.k8s.io/release/${KUBEVERSION}/bin/linux/amd64/kubectl"
-        sudo install kubectl /usr/local/bin/kubectl
+        curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
         kubectl config use-context minikube
-        kubectl cluster-info  # Verify the Minikube cluster is running
+        kubectl cluster-info
 
-    # Step 3: Build Docker image (optional, if you want to build it within the pipeline)
     - name: Build Docker image
       run: |
-        cd /home/user/cats
         docker build -t bigstan00/cats:${{ github.sha }} .
-        docker push bigstan00/cats:${{ github.sha }}  # Push to your Docker registry
+        docker push bigstan00/cats:${{ github.sha }}
 
-    # Step 4: Deploy to Minikube
     - name: Deploy to Minikube
       run: |
-        kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }} --record
+        kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }}
         kubectl rollout status deployment/cats-app
 
-    # Step 5: Expose the service (optional, if you don't have it already)
-    - name: Expose service via Minikube tunnel
+    - name: Expose service if not already exposed
       run: |
-        minikube tunnel &  # This is important for exposing the service to your local machine
-        kubectl expose deployment cats-app --port=80 --target-port=8000 --type=NodePort
+        if ! kubectl get svc cats-app; then
+          kubectl expose deployment cats-app --port=80 --target-port=8000 --type=NodePort
+        fi
 
-    # Step 6: Verify the deployment
     - name: Verify Deployment
       run: |
-        kubectl get pods  # Get pods and ensure they are running
-        kubectl get svc  # Get services and verify your service is up
-
-    # Step 7: Clean up (optional)
-    - name: Clean up Minikube
-      run: |
-        minikube stop  # Stop Minikube after the job completes
-        minikube delete  # Optionally delete Minikube to save resources
+        kubectl get pods
+        kubectl get svc
