@@ -35,7 +35,7 @@ jobs:
     - name: Build Docker image
       run: |
         cd /home/user/cats
-        docker build -t bigsta00/cats:${{ github.sha }} .
+        docker build -t bigstan00/cats:${{ github.sha }} .
         docker push bigstan00/cats:${{ github.sha }}  # Push to your Docker registry
 
     # Step 4: Deploy to Minikube
