@@ -1,3 +1,52 @@
+# name: Deploy Cats App to Minikube
+
+# on:
+#   push:
+#     branches:
+#       - master
+#     tags:
+#       - 'v*'
+#   workflow_dispatch:
+
+# jobs:
+#   deploy:
+#     runs-on: self-hosted
+
+#     steps:
+#     - name: Checkout repository
+#       uses: actions/checkout@v2
+
+#     - name: Set up kubectl
+#       run: |
+#         KUBEVERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
+#         echo "Using Kubernetes version: $KUBEVERSION"
+#         curl -LO "https://dl.k8s.io/release/${KUBEVERSION}/bin/linux/amd64/kubectl"
+#         chmod +x kubectl
+#         sudo mv kubectl /usr/local/bin/
+#         kubectl version --client
+
+#     - name: Build Docker image
+#       run: |
+#         docker build -t bigstan00/cats:${{ github.sha }} .
+#         docker push bigstan00/cats:${{ github.sha }}
+
+#     - name: Deploy to Minikube
+#       run: |
+#         kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }}
+#         kubectl rollout status deployment/cats-app
+
+#     - name: Expose service if not already exposed
+#       run: |
+#         if ! kubectl get svc cats-app; then
+#           kubectl expose deployment cats-app --port=80 --target-port=8000 --type=NodePort
+#         fi
+
+#     - name: Verify Deployment
+#       run: |
+#         kubectl get pods
+#         kubectl get svc
+
+
 name: Deploy Cats App to Minikube
 
 on:
@@ -16,7 +65,15 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    - name: Cache kubectl
+      id: cache-kubectl
+      uses: actions/cache@v3
+      with:
+        path: /usr/local/bin/kubectl
+        key: kubectl-${{ runner.os }}
+
     - name: Set up kubectl
+      if: steps.cache-kubectl.outputs.cache-hit != 'true'
       run: |
         KUBEVERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
         echo "Using Kubernetes version: $KUBEVERSION"
