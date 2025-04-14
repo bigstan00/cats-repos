@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: cats
-        image: bigstan00/cats-app:2.0.1
+        image: bigstan00/cat:1.0.0
         ports:
         - containerPort: 8000
         env:
