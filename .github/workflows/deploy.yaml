@@ -1,67 +1,38 @@
-# # name: Deploy Cats App to Minikube
-
-# # on:
-# #   push:
-# #     branches:
-# #       - master
-# #     tags:
-# #       - 'v*'
-# #   workflow_dispatch:
-
-# # jobs:
-# #   deploy:
-# #     runs-on: self-hosted
-
-# #     steps:
-# #     - name: Checkout repository
-# #       uses: actions/checkout@v2
-
-# #     - name: Set up kubectl
-# #       run: |
-# #         KUBEVERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
-# #         echo "Using Kubernetes version: $KUBEVERSION"
-# #         curl -LO "https://dl.k8s.io/release/${KUBEVERSION}/bin/linux/amd64/kubectl"
-# #         chmod +x kubectl
-# #         sudo mv kubectl /usr/local/bin/
-# #         kubectl version --client
-
-# #     - name: Build Docker image
-# #       run: |
-# #         docker build -t bigstan00/cats:${{ github.sha }} .
-# #         docker push bigstan00/cats:${{ github.sha }}
-
-# #     - name: Deploy to Minikube
-# #       run: |
-# #         kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }}
-# #         kubectl rollout status deployment/cats-app
-
-# #     - name: Expose service if not already exposed
-# #       run: |
-# #         if ! kubectl get svc cats-app; then
-# #           kubectl expose deployment cats-app --port=80 --target-port=8000 --type=NodePort
-# #         fi
-
-# #     - name: Verify Deployment
-# #       run: |
-# #         kubectl get pods
-# #         kubectl get svc
-
-
 # name: Deploy Cats App to Minikube
 
 # on:
 #   push:
-#     branches: [ master ]
-#     tags: [ 'v*' ]
+#     branches: [master]
+#     tags: ['v*']
 #   workflow_dispatch:
+#     inputs:
+#       revision:
+#         description: 'Git revision to deploy'
+#         required: true
+#         type: string
 
 # jobs:
 #   deploy:
 #     runs-on: ubuntu-latest
-    
+
 #     steps:
 #     - name: Checkout code
 #       uses: actions/checkout@v4
+#       with:
+#         ref: ${{ github.event.inputs.revision || github.ref }}
+
+#     - name: Verify required files
+#       run: |
+#         echo "Checking repository structure..."
+#         ls -la
+#         if [ ! -f "Dockerfile" ]; then
+#           echo "❌ Error: Dockerfile not found in root directory"
+#           exit 1
+#         fi
+#         if [ ! -d "k8s" ]; then
+#           echo "❌ Error: k8s directory not found"
+#           exit 1
+#         fi
 
 #     - name: Set up Minikube
 #       uses: medyagh/setup-minikube@latest
@@ -71,7 +42,7 @@
 #         cpus: 4
 #         memory: 8g
 
-#     - name: Start Minikube with registry
+#     - name: Start Minikube with required addons
 #       run: |
 #         minikube start
 #         minikube addons enable registry
@@ -81,38 +52,54 @@
 #       run: |
 #         echo "Configuring Docker to use Minikube's daemon..."
 #         eval $(minikube -p minikube docker-env)
-#         docker info | grep "Docker Root Dir"  # Verify it's using Minikube's Docker
+#         docker info | grep "Docker Root Dir"
 
 #     - name: Build and push Docker image
 #       run: |
 #         eval $(minikube -p minikube docker-env)
+#         echo "Building Docker image..."
 #         docker build -t cats-app:${{ github.sha }} .
 #         docker tag cats-app:${{ github.sha }} localhost:5000/cats-app:${{ github.sha }}
 #         docker push localhost:5000/cats-app:${{ github.sha }}
 
-#     - name: Deploy application
+#     - name: Deploy Kubernetes resources
 #       run: |
-#         # Apply deployment if not exists
-#         if ! kubectl get deployment cats-app; then
-#           kubectl create deployment cats-app --image=localhost:5000/cats-app:${{ github.sha }} --port=8000
-#         fi
-        
-#         # Zero-downtime update
+#         echo "Applying Kubernetes manifests from k8s directory..."
+#         kubectl apply -f k8s/deployment.yaml
+#         kubectl apply -f k8s/svc.yaml
+#         kubectl apply -f k8s/hpa.yaml
+#         kubectl apply -f k8s/pdb.yaml
+
+#         echo "Updating image..."
 #         kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
 #         kubectl rollout status deployment/cats-app --timeout=300s
 
-#     - name: Expose service
-#       run: |
-#         if ! kubectl get svc cats-app; then
-#           kubectl expose deployment cats-app --type=NodePort --port=80 --target-port=8000
-#         fi
-
 #     - name: Verify deployment
 #       run: |
+#         echo "Deployment status:"
 #         kubectl get deployments -o wide
+#         echo ""
+#         echo "Pod status:"
 #         kubectl get pods -o wide
+#         echo ""
+#         echo "Service status:"
 #         kubectl get svc -o wide
-#         minikube service cats-app --url
+#         echo ""
+#         echo "Access URLs:"
+#         minikube service cats-service --url
+#         echo ""
+#         echo "Horizontal Pod Autoscaler status:"
+#         kubectl get hpa -o wide || true
+
+#     - name: Rollback to revision
+#       run: |
+#         echo "Available revisions:"
+#         kubectl rollout history deployment/cats-app
+    
+#         echo "Rolling back to revision ${{ github.event.inputs.revision }}"
+#         kubectl rollout undo deployment/cats-app --to-revision=${{ inputs.revision }}
+        
+#         kubectl rollout status deployment/cats-app --timeout=300s
 
 name: Deploy Cats App to Minikube
 
@@ -121,27 +108,37 @@ on:
     branches: [master]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Deployment revision number for rollback'
+        required: false
+        type: number
+        default: 0
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.revision && format('deploy-{0}', github.event.inputs.revision) || github.ref }}
 
     - name: Verify required files
       run: |
-        echo "Checking repository structure..."
+        echo "🔍 Checking repository structure..."
         ls -la
         if [ ! -f "Dockerfile" ]; then
-          echo "❌ Error: Dockerfile not found in root directory"
+          echo "::error::❌ Dockerfile not found in root directory"
           exit 1
         fi
         if [ ! -d "k8s" ]; then
-          echo "❌ Error: k8s directory not found"
+          echo "::error::❌ k8s directory not found"
           exit 1
         fi
+        echo "✅ All required files present"
 
     - name: Set up Minikube
       uses: medyagh/setup-minikube@latest
@@ -150,52 +147,73 @@ jobs:
         driver: docker
         cpus: 4
         memory: 8g
+        wait-timeout: 5m
 
     - name: Start Minikube with required addons
       run: |
+        echo "🚀 Starting Minikube cluster..."
         minikube start
         minikube addons enable registry
         minikube addons enable metrics-server
+        minikube status
 
     - name: Configure Docker environment
       run: |
-        echo "Configuring Docker to use Minikube's daemon..."
+        echo "🐳 Configuring Docker to use Minikube's daemon..."
         eval $(minikube -p minikube docker-env)
         docker info | grep "Docker Root Dir"
 
     - name: Build and push Docker image
       run: |
         eval $(minikube -p minikube docker-env)
-        echo "Building Docker image..."
+        echo "🏗️ Building Docker image..."
         docker build -t cats-app:${{ github.sha }} .
         docker tag cats-app:${{ github.sha }} localhost:5000/cats-app:${{ github.sha }}
         docker push localhost:5000/cats-app:${{ github.sha }}
+        echo "✅ Image built and pushed: localhost:5000/cats-app:${{ github.sha }}"
 
     - name: Deploy Kubernetes resources
       run: |
-        echo "Applying Kubernetes manifests from k8s directory..."
+        echo "⚙️ Applying Kubernetes manifests..."
         kubectl apply -f k8s/deployment.yaml
         kubectl apply -f k8s/svc.yaml
         kubectl apply -f k8s/hpa.yaml
         kubectl apply -f k8s/pdb.yaml
 
-        echo "Updating image..."
+        echo "🔄 Updating deployment image..."
         kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
         kubectl rollout status deployment/cats-app --timeout=300s
+        echo "✅ Deployment complete"
 
     - name: Verify deployment
       run: |
-        echo "Deployment status:"
+        echo "📊 Deployment status:"
         kubectl get deployments -o wide
         echo ""
-        echo "Pod status:"
-        kubectl get pods -o wide
+        echo "🐳 Pod status:"
+        kubectl get pods -o wide --selector=app=cats-app
         echo ""
-        echo "Service status:"
-        kubectl get svc -o wide
+        echo "🔌 Service status:"
+        kubectl get svc cats-service -o wide
         echo ""
-        echo "Access URLs:"
-        minikube service cats-service --url
+        echo "🌐 Access URLs:"
+        minikube service cats-service --url || echo "::warning::Service URL not available"
         echo ""
-        echo "Horizontal Pod Autoscaler status:"
+        echo "📈 Horizontal Pod Autoscaler status:"
         kubectl get hpa -o wide || true
+
+    - name: Rollback if requested
+      if: ${{ github.event.inputs.revision != 0 }}
+      run: |
+        echo "⏪ Starting rollback to revision ${{ github.event.inputs.revision }}"
+        if ! kubectl rollout undo deployment/cats-app --to-revision=${{ github.event.inputs.revision }}; then
+          echo "::error::Failed to rollback to revision ${{ github.event.inputs.revision }}"
+          exit 1
+        fi
+        
+        echo "🔄 Verifying rollback status..."
+        kubectl rollout status deployment/cats-app --timeout=300s
+        echo "✅ Rollback complete"
+        
+        echo "📜 Updated deployment history:"
+        kubectl rollout history deployment/cats-app
