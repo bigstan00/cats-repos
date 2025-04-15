@@ -12,14 +12,14 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      app: cats
+      app: cats-app
   template:
     metadata:
       labels:
-        app: cats
+        app: cats-app
     spec:
       containers:
-      - name: cats
+      - name: cats-app
         image: bigstan00/cat:2.0.1
         ports:
         - containerPort: 8000
