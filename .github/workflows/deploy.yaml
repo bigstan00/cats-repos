@@ -33,14 +33,25 @@ jobs:
         sudo mv kubectl /usr/local/bin/
         kubectl version --client
 
-    - name: Build Docker image
+    - name: Set KUBECONFIG
+      run: |
+        export KUBECONFIG=$HOME/.kube/config
+        echo "KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
+
+    - name: Use Minikube Docker daemon
+      run: |
+        eval $(minikube docker-env)
+        echo "DOCKER_HOST=$DOCKER_HOST" >> $GITHUB_ENV
+
+    - name: Build Docker image inside Minikube
       run: |
         docker build -t bigstan00/cats:${{ github.sha }} .
-        docker push bigstan00/cats:${{ github.sha }}
+
+    # No push needed — image is already in Minikube's Docker daemon
 
     - name: Deploy to Minikube
       run: |
-        kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }}
+        kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }} || kubectl create deployment cats-app --image=bigstan00/cats:${{ github.sha }}
         kubectl rollout status deployment/cats-app
 
     - name: Expose service if not already exposed
@@ -51,5 +62,5 @@ jobs:
 
     - name: Verify Deployment
       run: |
-        kubectl get pods
-        kubectl get svc
+        kubectl get pods -o wide
+        kubectl get svc cats-app
