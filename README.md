@@ -253,3 +253,37 @@ MIT License. See [LICENSE](LICENSE).
 ✅ **CI/CD pipeline example**  
 ✅ **Production-ready K8s configs**  
 
+
+
+
+PRO'S AND CON'S 
+
+| Tool               | Pros                                      | Cons                                      |
+|--------------------|-------------------------------------------|-------------------------------------------|
+| Minikube      | Free, fast local testing, mimics Kubernetes | Not production-ready, limited resources   |
+| Kubernetes     | Built-in rolling updates, self-healing    | Complex YAML, steep learning curve       |
+| GitHub Actions | Easy CI/CD, integrates with Git           | Limited free minutes, YAML complexity    |
+| Prometheus    | Powerful monitoring, alerting             | Requires setup, resource-heavy           |
+| kubectl       | Direct cluster control, widely supported  | Command-heavy, needs cluster access      |
+
+Key Takeaways:
+- For Local Testing: Minikube is perfect but limited.  
+- For Production: Use real Kubernetes clusters (EKS/GKE).  
+- Automation: GitHub Actions is simple but has limits.  
+- Monitoring: Essential but requires setup effort.  
+
+
+Rolling Update strategy - 
+
+Pros:
+Easy to implement as it's the default.
+Gradual rollout and rollback.
+Resource-efficient as it doesn't require duplicate environments.   
+
+Cons:
+Can take longer for the full deployment.
+Old and new versions of the application run concurrently, so they must be compatible.   
+Rollback might involve a series of rolling updates back to the previous version.   
+
+
+
