@@ -80,6 +80,7 @@ jobs:
     - name: Build and push Docker image
       run: |
         eval $(minikube -p minikube docker-env)
+        cd /home/user/cats/Dockerfile
         docker build -t cats-app:${{ github.sha }} .
         docker tag cats-app:${{ github.sha }} localhost:5000/cats-app:${{ github.sha }}
         docker push localhost:5000/cats-app:${{ github.sha }}
