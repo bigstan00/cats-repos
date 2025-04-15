@@ -177,7 +177,7 @@ jobs:
         kubectl apply -f k8s/deployment.yaml
         kubectl apply -f k8s/svc.yaml
         kubectl apply -f k8s/hpa.yaml
-        kubectl apply -f pdb.yaml
+        kubectl apply -f k8s/pdb.yaml
 
         echo "Updating image..."
         kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
