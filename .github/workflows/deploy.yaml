@@ -47,48 +47,63 @@
 #         kubectl get svc
 
 
-name: Deploy version 2.1.0 to Minikube
+name: Deploy Cats App to Minikube
 
 on:
   push:
-    branches:
-      - master  # Or your production branch
+    branches: [ master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Minikube
-        uses: medyagh/setup-minikube@latest
-        with:
-          kubernetes-version: '1.28.0'
+    - name: Set up Minikube
+      uses: medyagh/setup-minikube@latest
+      with:
+        kubernetes-version: '1.28.0'
+        driver: docker
+        cpus: 4
+        memory: 8g
 
-      - name: Start Minikube
-        run: minikube start
+    - name: Start Minikube with registry
+      run: |
+        minikube start
+        minikube addons enable registry
+        minikube addons enable metrics-server
 
-      - name: Load Docker image (if needed)
-        if: ${{ fileExists('Dockerfile') }}
-        run: |
-          eval $(minikube -p minikube docker-env)
-          docker build -t my-cats1-app:2.1.0 .  # Build with version tag
-          docker tag my-app:2.1.0 localhost:5000/my-cats1-app:2.1.0
-          docker push localhost:5000/my-cats1-app:2.1.0
-          minikube image load localhost:5000/my-cats1-app:2.1.0
+    - name: Build and push Docker image
+      run: |
+        eval $(minikube -p minikube docker-env)
+        docker build -t cats-app:${{ github.sha }} .
+        docker tag cats-app:${{ github.sha }} localhost:5000/cats-app:${{ github.sha }}
+        docker push localhost:5000/cats-app:${{ github.sha }}
 
-      - name: Deploy to Kubernetes
-        run: |
-          eval $(minikube -p minikube docker-env)
-          # IMPORTANT:  Set the image tag in your deployment manifest
-          kubectl apply -f k8s/deployment.yaml
-          kubectl patch deployment my-cats1-app:lastest -p '{"spec": {"template": {"spec": {"containers": [{"name": "my-app", "image": "localhost:5000/my-app:2.1.0"}]}}}}' #change the name of the deployment to match yours
-          kubectl apply -f k8s/svc.yaml
+    - name: Deploy application
+      run: |
+        # Apply deployment if not exists
+        if ! kubectl get deployment cats-app; then
+          kubectl create deployment cats-app --image=localhost:5000/cats-app:${{ github.sha }} --port=8000
+        fi
+        
+        # Zero-downtime update
+        kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
+        kubectl rollout status deployment/cats-app --timeout=300s
 
-      - name: Verify Deployment
-        run: |
-          eval $(minikube -p minikube docker-env)
-          kubectl get deployments #check the deployment name
-          kubectl get pods #check the label
-          kubectl get svc
+    - name: Expose service
+      run: |
+        if ! kubectl get svc cats-app; then
+          kubectl expose deployment cats-app --type=NodePort --port=80 --target-port=8000
+        fi
+
+    - name: Verify deployment
+      run: |
+        kubectl get deployments -o wide
+        kubectl get pods -o wide
+        kubectl get svc -o wide
+        minikube service cats-app --url
