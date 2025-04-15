@@ -1,67 +1,147 @@
+# # name: Deploy Cats App to Minikube
+
+# # on:
+# #   push:
+# #     branches:
+# #       - master
+# #     tags:
+# #       - 'v*'
+# #   workflow_dispatch:
+
+# # jobs:
+# #   deploy:
+# #     runs-on: self-hosted
+
+# #     steps:
+# #     - name: Checkout repository
+# #       uses: actions/checkout@v2
+
+# #     - name: Set up kubectl
+# #       run: |
+# #         KUBEVERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
+# #         echo "Using Kubernetes version: $KUBEVERSION"
+# #         curl -LO "https://dl.k8s.io/release/${KUBEVERSION}/bin/linux/amd64/kubectl"
+# #         chmod +x kubectl
+# #         sudo mv kubectl /usr/local/bin/
+# #         kubectl version --client
+
+# #     - name: Build Docker image
+# #       run: |
+# #         docker build -t bigstan00/cats:${{ github.sha }} .
+# #         docker push bigstan00/cats:${{ github.sha }}
+
+# #     - name: Deploy to Minikube
+# #       run: |
+# #         kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }}
+# #         kubectl rollout status deployment/cats-app
+
+# #     - name: Expose service if not already exposed
+# #       run: |
+# #         if ! kubectl get svc cats-app; then
+# #           kubectl expose deployment cats-app --port=80 --target-port=8000 --type=NodePort
+# #         fi
+
+# #     - name: Verify Deployment
+# #       run: |
+# #         kubectl get pods
+# #         kubectl get svc
+
+
 # name: Deploy Cats App to Minikube
 
 # on:
 #   push:
-#     branches:
-#       - master
-#     tags:
-#       - 'v*'
+#     branches: [ master ]
+#     tags: [ 'v*' ]
 #   workflow_dispatch:
 
 # jobs:
 #   deploy:
-#     runs-on: self-hosted
-
+#     runs-on: ubuntu-latest
+    
 #     steps:
-#     - name: Checkout repository
-#       uses: actions/checkout@v2
+#     - name: Checkout code
+#       uses: actions/checkout@v4
 
-#     - name: Set up kubectl
+#     - name: Set up Minikube
+#       uses: medyagh/setup-minikube@latest
+#       with:
+#         kubernetes-version: '1.28.0'
+#         driver: docker
+#         cpus: 4
+#         memory: 8g
+
+#     - name: Start Minikube with registry
 #       run: |
-#         KUBEVERSION=$(curl -sSL https://dl.k8s.io/release/stable.txt)
-#         echo "Using Kubernetes version: $KUBEVERSION"
-#         curl -LO "https://dl.k8s.io/release/${KUBEVERSION}/bin/linux/amd64/kubectl"
-#         chmod +x kubectl
-#         sudo mv kubectl /usr/local/bin/
-#         kubectl version --client
+#         minikube start
+#         minikube addons enable registry
+#         minikube addons enable metrics-server
 
-#     - name: Build Docker image
+#     - name: Configure Docker environment
 #       run: |
-#         docker build -t bigstan00/cats:${{ github.sha }} .
-#         docker push bigstan00/cats:${{ github.sha }}
+#         echo "Configuring Docker to use Minikube's daemon..."
+#         eval $(minikube -p minikube docker-env)
+#         docker info | grep "Docker Root Dir"  # Verify it's using Minikube's Docker
 
-#     - name: Deploy to Minikube
+#     - name: Build and push Docker image
 #       run: |
-#         kubectl set image deployment/cats-app cats=bigstan00/cats:${{ github.sha }}
-#         kubectl rollout status deployment/cats-app
+#         eval $(minikube -p minikube docker-env)
+#         docker build -t cats-app:${{ github.sha }} .
+#         docker tag cats-app:${{ github.sha }} localhost:5000/cats-app:${{ github.sha }}
+#         docker push localhost:5000/cats-app:${{ github.sha }}
 
-#     - name: Expose service if not already exposed
+#     - name: Deploy application
+#       run: |
+#         # Apply deployment if not exists
+#         if ! kubectl get deployment cats-app; then
+#           kubectl create deployment cats-app --image=localhost:5000/cats-app:${{ github.sha }} --port=8000
+#         fi
+        
+#         # Zero-downtime update
+#         kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
+#         kubectl rollout status deployment/cats-app --timeout=300s
+
+#     - name: Expose service
 #       run: |
 #         if ! kubectl get svc cats-app; then
-#           kubectl expose deployment cats-app --port=80 --target-port=8000 --type=NodePort
+#           kubectl expose deployment cats-app --type=NodePort --port=80 --target-port=8000
 #         fi
 
-#     - name: Verify Deployment
+#     - name: Verify deployment
 #       run: |
-#         kubectl get pods
-#         kubectl get svc
-
+#         kubectl get deployments -o wide
+#         kubectl get pods -o wide
+#         kubectl get svc -o wide
+#         minikube service cats-app --url
 
 name: Deploy Cats App to Minikube
 
 on:
   push:
-    branches: [ master ]
-    tags: [ 'v*' ]
+    branches: [master]
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Verify required files
+      run: |
+        echo "Checking repository structure..."
+        ls -la
+        if [ ! -f "Dockerfile" ]; then
+          echo "❌ Error: Dockerfile not found in root directory"
+          exit 1
+        fi
+        if [ ! -d "k8s" ]; then
+          echo "❌ Error: k8s directory not found"
+          exit 1
+        fi
 
     - name: Set up Minikube
       uses: medyagh/setup-minikube@latest
@@ -71,7 +151,7 @@ jobs:
         cpus: 4
         memory: 8g
 
-    - name: Start Minikube with registry
+    - name: Start Minikube with required addons
       run: |
         minikube start
         minikube addons enable registry
@@ -81,35 +161,43 @@ jobs:
       run: |
         echo "Configuring Docker to use Minikube's daemon..."
         eval $(minikube -p minikube docker-env)
-        docker info | grep "Docker Root Dir"  # Verify it's using Minikube's Docker
+        docker info | grep "Docker Root Dir"
 
     - name: Build and push Docker image
       run: |
         eval $(minikube -p minikube docker-env)
+        echo "Building Docker image..."
         docker build -t cats-app:${{ github.sha }} .
         docker tag cats-app:${{ github.sha }} localhost:5000/cats-app:${{ github.sha }}
         docker push localhost:5000/cats-app:${{ github.sha }}
 
-    - name: Deploy application
+    - name: Deploy Kubernetes resources
       run: |
-        # Apply deployment if not exists
-        if ! kubectl get deployment cats-app; then
-          kubectl create deployment cats-app --image=localhost:5000/cats-app:${{ github.sha }} --port=8000
-        fi
+        echo "Applying Kubernetes manifests from k8s directory..."
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/svc.yaml
         
-        # Zero-downtime update
+        # Apply optional resources if they exist
+        [ -f "k8s/hpa.yaml" ] && kubectl apply -f k8s/hpa.yaml
+        [ -f "k8s/pdb.yaml" ] && kubectl apply -f k8s/pdb.yaml
+
+        echo "Updating image..."
         kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
         kubectl rollout status deployment/cats-app --timeout=300s
 
-    - name: Expose service
-      run: |
-        if ! kubectl get svc cats-app; then
-          kubectl expose deployment cats-app --type=NodePort --port=80 --target-port=8000
-        fi
-
     - name: Verify deployment
       run: |
+        echo "Deployment status:"
         kubectl get deployments -o wide
+        echo ""
+        echo "Pod status:"
         kubectl get pods -o wide
+        echo ""
+        echo "Service status:"
         kubectl get svc -o wide
+        echo ""
+        echo "Access URLs:"
         minikube service cats-app --url
+        echo ""
+        echo "Horizontal Pod Autoscaler status:"
+        kubectl get hpa -o wide || true
