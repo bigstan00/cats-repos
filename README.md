@@ -1,289 +1,295 @@
-# ** An application that generates url for pictures of cat **  
-**A Production-Grade Sinatra App with Prometheus, Kubernetes, and CI/CD**  
+# 🐱 Cats Application Deployment Platform
+
+![Kubernetes](https://img.shields.io/badge/kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Ruby](https://img.shields.io/badge/ruby-%23CC342D.svg?style=for-the-badge&logo=ruby&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=Prometheus&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5?style=for-the-badge&logo=githubactions&logoColor=white)
 
 ---
 
-## **📌 Table of Contents**  
-1. [Overview](#-overview)  
-2. [Features](#-features)  
-3. [Architecture](#-architecture)  
-4. [Prerequisites](#-prerequisites)  
-5. [Installation](#-installation)  
-6. [Running the Application](#-running-the-application)  
-7. [Kubernetes Deployment](#-kubernetes-deployment)  
-8. [Zero-Downtime Deployments](#-zero-downtime-deployments)  
-9. [Monitoring with Prometheus](#-monitoring-with-prometheus)  
-10. [Load Testing](#-load-testing)  
-11. [CI/CD Pipeline](#-cicd-pipeline)  
-12. [Troubleshooting](#-troubleshooting)  
-13. [License](#-license)  
+## 📚 Table of Contents
+
+- [Technologies Used](#technologies-used)
+- [Features](#features)  
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Application Architecture](#application-architecture)
+- [Detailed Setup](#detailed-setup)
+- [Dockerization](#dockerization)
+- [Kubernetes Manifests](#kubernetes-manifests)
+- [Monitoring & Metrics](#monitoring--metrics)
+- [CI/CD Pipeline](#cicd-pipeline)  
+- [Rollback Procedures](#rollback-procedures)
+- [Rolling Update Strategy](#rolling-update-strategy)
+- [Troubleshooting](#troubleshooting)
+- [Version History](#version-history)
+- [Key Takeaways](#key-takeaways)
 
 ---
 
-## **🌐 Overview**  
-A production-ready Ruby/Sinatra application that demonstrates:  
-- **REST API** integration with TheCatAPI  
-- **Prometheus monitoring** with custom metrics  
-- **Kubernetes orchestration** with zero-downtime deployments  
-- **Load testing** using Locust  
-- **CI/CD best practices**  
+## 🧰 Technologies Used
+
+| Category           | Technologies                          |
+|-------------------|----------------------------------------|
+| Application        | Ruby 2.7, Sinatra 2.2, Puma 5.6        |
+| Containerization   | Docker, Docker Hub                    |
+| Orchestration      | Kubernetes 1.28, Minikube             |
+| Monitoring         | Prometheus, Grafana (optional)        |
+| CI/CD              | GitHub Actions                        |
+| Infra Resilience   | HPA, PDB, ServiceMonitor              |
 
 ---
 
-## **✨ Features**  
-| Feature | Implementation |  
-|---------|---------------|  
-| **API Gateway** | Sinatra REST endpoints |  
-| **Observability** | Prometheus metrics endpoint (`/metrics`) |  
-| **Health Checks** | Liveness (`/health/live`) & Readiness (`/health/ready`) probes |  
-| **Resilience** | Kubernetes rolling updates & pod anti-affinity |  
-| **Performance** | Locust load testing scenarios |  
-| **Automation** | GitHub Actions CI/CD pipeline |  
+## ✨ Features
+
+- Zero-downtime deployments via Kubernetes rolling updates  
+- Dockerized Ruby/Sinatra microservice with multi-stage builds  
+- Health checks via `/health` endpoint  
+- Prometheus-ready metrics via `/metrics` endpoint  
+- Auto-scaling with Horizontal Pod Autoscaler (HPA)  
+- Pod Disruption Budget (PDB) ensures high availability  
+- CI/CD with GitHub Actions & support for automated rollback  
+- Versioned deployments for traceability and safety  
 
 ---
 
-## **🏗 Architecture**  
+## 💾 Prerequisites
+
+### Local Development Setup
+
+Install the following:
+
+- [Ruby 3.3.0](https://www.ruby-lang.org/)
+- [Bundler](https://bundler.io/)
+- [Docker](https://www.docker.com/)
+- [Minikube](https://minikube.sigs.k8s.io/)
+- [`kubectl`](https://kubernetes.io/docs/tasks/tools/)
+
+### Install Dependencies
+
+```bash
+bundle install
+```
+
+Start your Minikube cluster:
+
+```bash
+minikube start --driver=docker --cpus=4 --memory=8192
+```
+
+---
+
+## 🚀 Quick Start
+
+### Deploy Version 1.0.0
+
+```bash
+docker build -t bigstan00/cats-app:1.0.0 .
+docker run -p 8000:8000 cats-app:1.0.0
+docker tag cats-app:1.0.0 bigstan00/cats-app:1.0.0
+docker push bigstan00/cats-app:1.0.0
+kubectl apply -f k8s/
+```
+
+### Access the App and Health Check
+
+```bash
+minikube service cats-service
+curl $(minikube service cats-service --url)/health
+```
+
+---
+
+## 🏗 Application Architecture
+
 ```mermaid
 graph TD
-    A[User] --> B[Kubernetes Ingress]
-    B --> C[Sinatra Pods]
-    C --> D[TheCatAPI]
-    C --> E[Prometheus]
-    F[Locust] --> C
-    G[CI/CD Pipeline] --> H[Kubernetes Cluster]
+    A[User] --> B[Service:80]
+    B --> C[Pod:v1.0.0]
+    B --> D[Pod:v1.0.0]
+    C --> E[Metrics: /metrics]
+    D --> E
+    E --> F[Prometheus]
+    G[GitHub] -->|CI/CD| H[Docker Hub]
+    H -->|v1.0.0| C
+    H -->|v1.0.0| D
 ```
 
 ---
 
-## **⚙️ Prerequisites**  
-**Local Development:**  
-- Ruby ≥ 3.0 + Bundler  
-- Docker + Docker Compose  
+## 🔧 Detailed Setup
 
-**Kubernetes:**  
-- Minikube v1.25+ / K8s cluster  
-- kubectl + Helm v3  
+### Metrics and Health Endpoints
 
-**Monitoring:**  
-- Prometheus Operator  
+Defined in `cats.rb` using Sinatra:
 
-**Testing:**  
-- Locust  
+```ruby
+get '/health' do
+  content_type :json
+  {
+    status: 'OK',
+    version: ENV['APP_VERSION'],
+    metrics: '/metrics'
+  }.to_json
+end
 
----
+get '/' do
+  start_time = Time.now
+  REQUEST_COUNTER.increment(method: 'GET', path: '/')
+  response = { message: "Welcome to Cats API v#{ENV['APP_VERSION']}" }.to_json
+  RESPONSE_TIME.observe(Time.now - start_time)
+  response
+end
 
-## **📥 Installation**  
-```bash
-git clone https://github.com/Streetbees/cats
-cd cats
+get '/metrics' do
+  content_type 'text/plain'
+  Prometheus::Client.configuration.data_store.values.to_text
+end
+```
 
-# Install dependencies
-bundle install
+Dependencies declared in `Gemfile`:
 
-# Build Docker image
-docker build -t cats-app:1.0.0 .
-docker tag dockerhubuser/cats-app:1.0.0
-docker push dockerhubuser/cats-app:1.0.0
-
-docker build -t cats-app:2.0.2 .
-docker tag dockerhubuser/cats-app:2.0.2
-docker push dockerhubuser/cats-app:2.0.2
+```ruby
+gem 'sinatra', '~> 2.2'
+gem 'puma', '~> 5.6'
+gem 'prometheus-client', '~> 2.1'
+gem 'rack-prometheus', '~> 1.1'
 ```
 
 ---
 
-## **🏃 Running the Application**  
-**1. Local Development:**  
-```bash
-bundle exec ruby cats.rb
-```
-- App: `http://localhost:8000`  
-- Metrics: `http://localhost:8000/metrics`  
-- health: `http://localhost:8000/health`
+## 📦 Dockerization
 
-**2. Docker Compose:**  
-```bash
-docker run -p 8000:8000 cats-app:latest
-```
+Multi-stage Dockerfile:
 
-**3. Kubernetes (Minikube):**  
-```bash
-minikube start
-kubectl apply -f k8s/
-minikube service cats-service --url
+```dockerfile
+FROM ruby:2.7.6-slim as builder
+WORKDIR /app
+COPY Gemfile* .
+RUN bundle install --jobs=4 --retry=3
+
+FROM ruby:2.7.6-slim
+COPY --from=builder /usr/local/bundle /usr/local/bundle
+COPY . .
+EXPOSE 8000
+CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
 ```
 
 ---
 
-## **☸️ Kubernetes Deployment**  
-### **Core Components**  
+## 📂 Kubernetes Manifests
+
+- `deployment.yaml` – includes rolling update strategy and probes  
+- `service.yaml` – exposes the service using `LoadBalancer` or `NodePort`  
+- `hpa.yaml` – defines CPU/memory-based autoscaling rules  
+- `pdb.yaml` – ensures minimum number of running pods  
+- `prometheus.yaml` – enables metrics collection via ServiceMonitor  
+
+---
+
+## 📈 Monitoring & Metrics
+
+Prometheus scrapes `/metrics` endpoint:
+
 ```bash
-# Install Prometheus Operator (without Grafana)
-helm install prometheus prometheus-community/kube-prometheus-stack \
-  -n monitoring \
-  --set grafana.enabled=false
+kubectl port-forward svc/cats-service 8080:80
+curl http://localhost:8080/metrics
 ```
 
-### **Deployment Configuration**  
+Check Prometheus targets at `http://localhost:9090/targets`.
+
+---
+
+## ⚙️ CI/CD Pipeline
+
+### GitHub Actions Workflow
+
+Triggered by push to `master`, tags like `v*`, or manually with rollback:
+
 ```yaml
-# k8s/deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: cats-app
-spec:
-  replicas: 3
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 1
-  selector:
-    matchLabels:
-      app: cats
-  template:
-    metadata:
-      labels:
-        app: cats
-    spec:
-      containers:
-      - name: cats
-        image: bigstan00/cats-app:2.0.1
-        ports:
-        - containerPort: 8000
-        env:
-        - name: APP_VERSION
-          value: "1.0.0"
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 15  # Account for random startup
-          periodSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 20
-          periodSeconds: 10 
-
-
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Rollback revision'
+        required: false
 ```
+
+Steps include building the Docker image, updating Kubernetes deployment, and optionally rolling back.
 
 ---
 
-## **🔄 Zero-Downtime Deployments**  
-### **1. Rolling Updates (Default)**  
+## 🖙 Rollback Procedures
+
+### Manual
+
 ```bash
-kubectl set image deployment/cats-app app=cats-app:2.0.0
-kubectl rollout status deployment/cats-app
+kubectl rollout history deployment cats-app
+kubectl rollout undo deployment cats-app --to-revision=1
 ```
 
-## **📊 Monitoring with Prometheus**  
-**Key Metrics Exposed:**  
-| Metric | Type | Description |  
-|--------|------|-------------|  
-| `http_requests_total` | Counter | Total API requests |  
-| `http_response_time_seconds` | Histogram | Request latency |  
-| `cats_active_users` | Gauge | Concurrent users |  
+### GitHub Actions Rollback
 
-**Access Prometheus:**  
+Trigger the workflow with a `revision` input for automatic rollback.
+
+---
+
+## 🔀 Rolling Update Strategy
+
+Kubernetes' rolling update strategy gradually replaces pods with new versions without downtime.
+
+### ✅ Pros
+
+- Easy to implement — it’s the **default strategy** in Kubernetes
+- Supports **gradual rollout and rollback**
+- **Resource-efficient** — no need for duplicate environments
+
+### ⚠️ Cons
+
+- **Slower deployments** for large-scale apps
+- Requires **backward compatibility** between old and new versions (since both run simultaneously)
+- **Rollback** might trigger another rolling update, making full reversions slower
+
+---
+
+## 🛯 Troubleshooting
+
+| Issue               | Resolution                                                     |
+|--------------------|----------------------------------------------------------------|
+| `ImagePullBackOff` | Ensure image is public or use Docker credentials secret        |
+| `CrashLoopBackOff` | Check logs via `kubectl logs <pod-name>`                       |
+| `no endpoints`     | Verify service selector matches deployment pod labels          |
+| Metrics not showing| Confirm ServiceMonitor label selectors are correct             |
+
+Useful Commands:
+
 ```bash
-kubectl port-forward -n monitoring svc/prometheus-operated 9090
-```
-Open: `http://localhost:9090`  
-
----
-
-## **🐜 Load Testing**  
-**1. Run Locust:**  
-```bash
-locust -f locustfile.py \
-  --headless \
-  -u 1000 \ 
-  -r 100 \
-  -t 10m \
-  --host=http://<service-ip>
-```
-
-**2. Test Scenarios:**  
-```python
-# locustfile.py
-@task(3)
-def test_cat_api(self):
-    self.client.get("/")
+kubectl describe deployment cats-app
+kubectl logs -f <pod-name>
+kubectl get pods -o jsonpath='{.items[*].spec.containers[*].image}'
 ```
 
 ---
 
-## **🛠️ CI/CD Pipeline**  
-**.github/workflows/deploy.yml**  
-```yaml
-jobs:
-  deploy:
-    steps:
-    - name: Deploy to Kubernetes
-      run: |
-        kubectl apply -f k8s/deployment.yaml
-        kubectl rollout status deployment/cats-app --timeout=3m
-        kubectl get pods -o wide
-```
+## 📦 Version History
+
+| Version | Tag                        | Description                              |
+|---------|----------------------------|------------------------------------------|
+| 1.0.0   | `bigstan00/cats-app:1.0.0` | Basic health check setup                 |
+| 2.0.1   | `bigstan00/cats-app:latest`| Prometheus metrics + HPA integration     |
 
 ---
 
-## **🔧 Troubleshooting**  
-| Issue | Solution |  
-|-------|----------|  
-| ImagePullBackoff | Check Docker registry auth |  
-| CrashLoopBackoff | Verify liveness probe config |  
-| Prometheus 404 | Ensure service monitors are labeled |  
-| Locust timeouts | Increase test host timeout |  
+## 📌 Key Takeaways
+
+- **Minikube** is great for development, but consider EKS or GKE for production.
+- **GitHub Actions** is simple to use and supports manual rollbacks.
+- **Prometheus Monitoring** improves observability but needs configuration.
+- **Rolling Updates** offer safety but require version compatibility.
 
 ---
-
-## **📜 License**  
-MIT License. See [LICENSE](LICENSE).  
-
----
-
-**Key Improvements:**  
-✅ Added **architecture diagram**  
-✅ Detailed **zero-downtime strategies**  
-✅ **Prometheus metrics documentation**  
-✅ **CI/CD pipeline example**  
-✅ **Production-ready K8s configs**  
-
-
-
-
-PRO'S AND CON'S 
-
-| Tool               | Pros                                      | Cons                                      |
-|--------------------|-------------------------------------------|-------------------------------------------|
-| Minikube      | Free, fast local testing, mimics Kubernetes | Not production-ready, limited resources   |
-| Kubernetes     | Built-in rolling updates, self-healing    | Complex YAML, steep learning curve       |
-| GitHub Actions | Easy CI/CD, integrates with Git           | Limited free minutes, YAML complexity    |
-| Prometheus    | Powerful monitoring, alerting             | Requires setup, resource-heavy           |
-| kubectl       | Direct cluster control, widely supported  | Command-heavy, needs cluster access      |
-
-Key Takeaways:
-- For Local Testing: Minikube is perfect but limited.  
-- For Production: Use real Kubernetes clusters (EKS/GKE).  
-- Automation: GitHub Actions is simple but has limits.  
-- Monitoring: Essential but requires setup effort.  
-
-
-Rolling Update strategy - 
-
-Pros:
-Easy to implement as it's the default.
-Gradual rollout and rollback.
-Resource-efficient as it doesn't require duplicate environments.   
-
-Cons:
-Can take longer for the full deployment.
-Old and new versions of the application run concurrently, so they must be compatible.   
-Rollback might involve a series of rolling updates back to the previous version.   
-
-
 
