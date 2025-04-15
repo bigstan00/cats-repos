@@ -12,11 +12,11 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      app: cats-app
+      app: cats
   template:
     metadata:
       labels:
-        app: cats-app
+        app: cats
     spec:
       containers:
       - name: cats-app

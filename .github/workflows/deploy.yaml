@@ -176,10 +176,8 @@ jobs:
         echo "Applying Kubernetes manifests from k8s directory..."
         kubectl apply -f k8s/deployment.yaml
         kubectl apply -f k8s/svc.yaml
-        
-        # Apply optional resources if they exist
-        [ -f "k8s/hpa.yaml" ] && kubectl apply -f k8s/hpa.yaml
-        [ -f "k8s/pdb.yaml" ] && kubectl apply -f k8s/pdb.yaml
+        kubectl apply -f k8s/hpa.yaml
+        kubectl apply -f pdb.yaml
 
         echo "Updating image..."
         kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
@@ -197,7 +195,7 @@ jobs:
         kubectl get svc -o wide
         echo ""
         echo "Access URLs:"
-        minikube service cats-app --url
+        minikube service cats-service --url
         echo ""
         echo "Horizontal Pod Autoscaler status:"
         kubectl get hpa -o wide || true
