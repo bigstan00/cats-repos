@@ -77,6 +77,12 @@ jobs:
         minikube addons enable registry
         minikube addons enable metrics-server
 
+    - name: Configure Docker environment
+      run: |
+        echo "Configuring Docker to use Minikube's daemon..."
+        eval $(minikube -p minikube docker-env)
+        docker info | grep "Docker Root Dir"  # Verify it's using Minikube's Docker
+
     - name: Build and push Docker image
       run: |
         eval $(minikube -p minikube docker-env)
