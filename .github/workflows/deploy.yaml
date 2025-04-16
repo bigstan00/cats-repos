@@ -76,6 +76,52 @@ jobs:
         kubectl set image deployment/cats-app cats-app=localhost:5000/cats-app:${{ github.sha }} --record
         kubectl rollout status deployment/cats-app --timeout=300s
         echo "✅ Deployment complete"
+
+    - name: Install Prometheus Stack
+      if: always()
+      run: |
+        echo "📊 Setting up Prometheus monitoring..."
+        kubectl create namespace monitoring || true
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+          -n monitoring \
+          --set grafana.enabled=false \
+          --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+          --wait
+
+    - name: Apply ServiceMonitor
+      run: |
+        echo "🔭 Applying ServiceMonitor for cats-app..."
+        kubectl apply -f k8s/k8s/prometheus-monitor.yaml
+        sleep 10  # Wait for discovery
+
+    - name: Verify Prometheus Integration
+      run: |
+        echo "🔄 Waiting for Prometheus to be ready..."
+        kubectl -n monitoring wait --for=condition=available deployment/prometheus-kube-prometheus-operator --timeout=120s
+        
+        echo "📡 Verifying metrics collection..."
+        kubectl port-forward svc/prometheus-kube-prometheus-prometheus 9090 -n monitoring &
+        sleep 5  # Allow port-forward to establish
+        
+        # Check if cats-app is being scraped
+        if ! curl -s "http://localhost:9090/api/v1/targets" | jq -e '.data.activeTargets[] | select(.labels.job=="cats-app" and .health=="up")'; then
+          echo "::error::Prometheus is not scraping cats-app metrics"
+          echo "Debug info:"
+          kubectl -n monitoring get servicemonitors
+          kubectl describe servicemonitor cats-app-monitor -n monitoring
+          exit 1
+        fi
+        
+        # Verify metrics endpoint
+        SERVICE_URL=$(minikube service cats-service --url)
+        if ! curl -s "$SERVICE_URL/metrics" | grep -q "http_requests_total"; then
+          echo "::error::Metrics endpoint not returning expected data"
+          exit 1
+        fi
+        
+        echo "✅ Prometheus integration verified"
+    
     - name: Verify deployment
       run: |
         echo "📊 Deployment status:"

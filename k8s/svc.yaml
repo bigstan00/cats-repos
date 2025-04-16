@@ -10,4 +10,5 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8000
-  type: LoadBalancer
+      name: web  # This is the important change
+  type: NodePort
