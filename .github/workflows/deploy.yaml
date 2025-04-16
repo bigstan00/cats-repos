@@ -92,7 +92,7 @@ jobs:
     - name: Apply ServiceMonitor
       run: |
         echo "🔭 Applying ServiceMonitor for cats-app..."
-        kubectl apply -f k8s/k8s/prometheus-monitor.yaml
+        kubectl apply -f k8s/prometheus-monitor.yaml
         sleep 10  # Wait for discovery
 
     - name: Verify Prometheus Integration
