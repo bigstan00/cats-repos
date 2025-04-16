@@ -95,6 +95,19 @@ jobs:
         kubectl apply -f k8s/prometheus-monitor.yaml
         sleep 10  # Wait for discovery
 
+    - name: Verify Label Matching
+      run: |
+        echo "🔍 Actual Service Labels:"
+        kubectl get svc cats-service -o jsonpath='{.metadata.labels}' && echo
+    
+        echo "🔍 ServiceMonitor Selector:"
+        kubectl get servicemonitor cats-app-monitor -n monitoring -o jsonpath='{.spec.selector.matchLabels}' && echo
+    
+        if ! kubectl get svc -l app=cats; then
+          echo "::error::No services found with label 'app=cats'"
+          exit 1
+        fi
+
     - name: Verify Prometheus Integration
       run: |
         echo "🔄 Waiting for Prometheus to be ready..."
@@ -138,6 +151,7 @@ jobs:
         echo ""
         echo "📈 Horizontal Pod Autoscaler status:"
         kubectl get hpa -o wide || true
+    
     - name: Rollback if requested
       if: ${{ github.event.inputs.revision != 0 }}
       run: |
