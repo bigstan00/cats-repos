@@ -106,7 +106,7 @@ jobs:
         if ! kubectl get svc -l app=cats; then
           echo "::error::No services found with label 'app=cats'"
           exit 1
-        fi
+        ]fi
 
     - name: Verify Prometheus Integration
       run: |
