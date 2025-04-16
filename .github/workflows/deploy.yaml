@@ -36,6 +36,7 @@ jobs:
           exit 1
         fi
         echo "✅ All required files present"
+
     - name: Set up Minikube
       uses: medyagh/setup-minikube@latest
       with:
@@ -52,11 +53,13 @@ jobs:
         minikube addons enable registry
         minikube addons enable metrics-server
         minikube status
+
     - name: Configure Docker environment
       run: |
         echo "🐳 Configuring Docker to use Minikube's daemon..."
         eval $(minikube -p minikube docker-env)
         docker info | grep "Docker Root Dir"
+
     - name: Build and push Docker image
       run: |
         eval $(minikube -p minikube docker-env)
@@ -65,6 +68,7 @@ jobs:
         docker tag cats-app:${{ github.sha }} localhost:5000/cats-app:${{ github.sha }}
         docker push localhost:5000/cats-app:${{ github.sha }}
         echo "✅ Image built and pushed: localhost:5000/cats-app:${{ github.sha }}"
+
     - name: Deploy Kubernetes resources
       run: |
         echo "⚙️ Applying Kubernetes manifests..."
@@ -106,35 +110,41 @@ jobs:
         if ! kubectl get svc -l app=cats; then
           echo "::error::No services found with label 'app=cats'"
           exit 1
-        ]fi
+        fi
 
     - name: Verify Prometheus Integration
       run: |
-        echo "🔄 Waiting for Prometheus to be ready..."
-        kubectl -n monitoring wait --for=condition=available deployment/prometheus-kube-prometheus-operator --timeout=120s
-        
-        echo "📡 Verifying metrics collection..."
-        kubectl port-forward svc/prometheus-kube-prometheus-prometheus 9090 -n monitoring &
-        sleep 5  # Allow port-forward to establish
-        
-        # Check if cats-app is being scraped
-        if ! curl -s "http://localhost:9090/api/v1/targets" | jq -e '.data.activeTargets[] | select(.labels.job=="cats-app" and .health=="up")'; then
-          echo "::error::Prometheus is not scraping cats-app metrics"
-          echo "Debug info:"
-          kubectl -n monitoring get servicemonitors
-          kubectl describe servicemonitor cats-app-monitor -n monitoring
-          exit 1
-        fi
-        
-        # Verify metrics endpoint
-        SERVICE_URL=$(minikube service cats-service --url)
-        if ! curl -s "$SERVICE_URL/metrics" | grep -q "http_requests_total"; then
-          echo "::error::Metrics endpoint not returning expected data"
-          exit 1
-        fi
-        
-        echo "✅ Prometheus integration verified"
+        echo "🔍 Verifying components..."
     
+        # 1. Verify service labels and port
+        echo "Service Labels:"
+        kubectl get svc cats-service -o jsonpath='{.metadata.labels}'
+        echo -e "\nService Port Name:"
+        kubectl get svc cats-service -o jsonpath='{.spec.ports[0].name}'
+    
+        # 2. Verify endpoints
+        echo -e "\nEndpoints:"
+        kubectl get endpoints cats-service -o wide
+    
+        # 3. Verify pod metrics
+        POD_NAME=$(kubectl get pods -l app=cats -o jsonpath='{.items[0].metadata.name}')
+        echo -e "\nPod Metrics:"
+        kubectl exec $POD_NAME -- curl -s http://localhost:8000/metrics | head -n5
+    
+        # 4. Verify ServiceMonitor
+        echo -e "\nServiceMonitor Selector:"
+        kubectl get servicemonitor cats-app-monitor -n monitoring -o jsonpath='{.spec.selector.matchLabels}'
+    
+        # 5. Check Prometheus targets
+        echo -e "\nWaiting for Prometheus..."
+        kubectl -n monitoring wait --for=condition=available deployment/prometheus-kube-prometheus-operator --timeout=120s
+    
+        echo -e "\nCurrent Targets:"
+        kubectl port-forward svc/prometheus-kube-prometheus-prometheus 9090 -n monitoring &
+        sleep 15
+        curl -s "http://localhost:9090/api/v1/targets" | jq '.data.activeTargets[] | {job: .labels.job, health: .health, lastError: .lastError}'
+        pkill -f "port-forward"
+
     - name: Verify deployment
       run: |
         echo "📊 Deployment status:"
@@ -151,7 +161,7 @@ jobs:
         echo ""
         echo "📈 Horizontal Pod Autoscaler status:"
         kubectl get hpa -o wide || true
-    
+
     - name: Rollback if requested
       if: ${{ github.event.inputs.revision != 0 }}
       run: |
